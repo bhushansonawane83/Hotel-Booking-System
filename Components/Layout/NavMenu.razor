@@ -1,0 +1,30 @@
+﻿<div class="top-row ps-3 navbar navbar-dark">
+    <div class="container-fluid">
+        <a class="navbar-brand" href="">Hotel Booking System</a>
+    </div>
+</div>
+
+<input type="checkbox" title="Navigation menu" class="navbar-toggler" />
+
+<div class="nav-scrollable" onclick="document.querySelector('.navbar-toggler').click()">
+    <nav class="flex-column">
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="search" Match="NavLinkMatch.All">
+                <span class="bi bi-search-nav-menu" aria-hidden="true"></span> Search Rooms
+            </NavLink>
+        </div>
+
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="loyalty">
+                <span class="bi bi-star-nav-menu" aria-hidden="true"></span> Loyalty Program
+            </NavLink>
+        </div>
+
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="staff">
+                <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Staff Dashboard
+            </NavLink>
+        </div>
+    </nav>
+</div>
+

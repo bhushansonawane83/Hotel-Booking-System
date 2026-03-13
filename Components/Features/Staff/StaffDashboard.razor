@@ -1,0 +1,194 @@
+@page "/staff"
+@rendermode InteractiveServer
+@using HBS.Models
+@using HBS.Services
+@inject IHotelService HotelService
+
+<PageTitle>Staff Dashboard</PageTitle>
+
+<div class="container-fluid mt-4">
+    <h2>Staff Dashboard</h2>
+
+    <ul class="nav nav-tabs mt-3">
+        <li class="nav-item">
+            <a class="nav-link @(activeTab == "rooms" ? "active" : "")" @onclick='() => SetActiveTab("rooms")' style="cursor: pointer">Room Status</a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link @(activeTab == "bookings" ? "active" : "")" @onclick='() => SetActiveTab("bookings")' style="cursor: pointer">All Bookings</a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link @(activeTab == "history" ? "active" : "")" @onclick='() => SetActiveTab("history")' style="cursor: pointer">Room History</a>
+        </li>
+    </ul>
+
+    <div class="mt-3">
+        @if (activeTab == "rooms")
+        {
+            <h4>Current Room Status</h4>
+            <div class="table-responsive">
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>Room Number</th>
+                            <th>Category</th>
+                            <th>Capacity</th>
+                            <th>Price/Night</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var room in rooms)
+                        {
+                            var status = roomStatus.GetValueOrDefault(room.Id, "Available");
+                            <tr>
+                                <td>@room.RoomNumber</td>
+                                <td>@room.Category</td>
+                                <td>@room.Capacity</td>
+                                <td>$@room.PricePerNight</td>
+                                <td>
+                                    <span class="badge @(status == "Occupied" ? "bg-danger" : "bg-success")">
+                                        @status
+                                    </span>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+        else if (activeTab == "bookings")
+        {
+            <h4>All Bookings</h4>
+            <div class="table-responsive">
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>Booking ID</th>
+                            <th>Room</th>
+                            <th>Customer</th>
+                            <th>Check-in</th>
+                            <th>Check-out</th>
+                            <th>Total</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var booking in bookings)
+                        {
+                            var room = HotelService.GetRoom(booking.RoomId);
+                            var customer = HotelService.GetCustomer(booking.CustomerId);
+                            <tr>
+                                <td>#@booking.Id</td>
+                                <td>@room?.RoomNumber</td>
+                                <td>@customer?.Name</td>
+                                <td>@booking.CheckIn.ToShortDateString()</td>
+                                <td>@booking.CheckOut.ToShortDateString()</td>
+                                <td>$@booking.TotalPrice</td>
+                                <td>
+                                    <span class="badge bg-info">@booking.Status</span>
+                                </td>
+                                <td>
+                                    @if (booking.Status != BookingStatus.Cancelled)
+                                    {
+                                        <button class="btn btn-sm btn-danger" @onclick="() => CancelBooking(booking.Id)">Cancel</button>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+        else if (activeTab == "history")
+        {
+            <h4>Room History</h4>
+            <div class="mb-3">
+                <label class="form-label">Select Room</label>
+                <select class="form-select" style="max-width: 200px" @bind="selectedRoomId" @bind:after="LoadHistory">
+                    <option value="0">-- Select Room --</option>
+                    @foreach (var room in rooms)
+                    {
+                        <option value="@room.Id">Room @room.RoomNumber</option>
+                    }
+                </select>
+            </div>
+
+            @if (selectedRoomId > 0)
+            {
+                <div class="table-responsive">
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>Timestamp</th>
+                                <th>Event Type</th>
+                                <th>Description</th>
+                                <th>Customer ID</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var history in roomHistory)
+                            {
+                                <tr>
+                                    <td>@history.Timestamp.ToString("g")</td>
+                                    <td>@history.EventType</td>
+                                    <td>@history.Description</td>
+                                    <td>@(history.CustomerId?.ToString() ?? "-")</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        }
+    </div>
+</div>
+
+@code {
+    private string activeTab = "rooms";
+    private List<Room> rooms = new();
+    private List<Booking> bookings = new();
+    private Dictionary<int, string> roomStatus = new();
+    private List<RoomHistory> roomHistory = new();
+    private int selectedRoomId = 0;
+
+    protected override void OnInitialized()
+    {
+        LoadData();
+    }
+
+    private void LoadData()
+    {
+        rooms = HotelService.GetAllRooms();
+        bookings = HotelService.GetBookings();
+        roomStatus = HotelService.GetRoomStatus();
+    }
+
+    private void LoadHistory()
+    {
+        if (selectedRoomId > 0)
+        {
+            roomHistory = HotelService.GetRoomHistory(selectedRoomId);
+        }
+    }
+
+    private void CancelBooking(int bookingId)
+    {
+        HotelService.CancelBooking(bookingId);
+        LoadData();
+    }
+
+    private void SetActiveTab(string tab)
+    {
+        activeTab = tab;
+        // Refresh data when switching tabs so the UI shows up-to-date status/bookings/history.
+        LoadData();
+
+        // If switching to history, reset selection / clear history until a room is selected.
+        if (tab == "history")
+        {
+            selectedRoomId = 0;
+            roomHistory = new List<RoomHistory>();
+        }
+    }
+}

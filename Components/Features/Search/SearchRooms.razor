@@ -1,0 +1,111 @@
+@page "/search"
+@rendermode InteractiveServer
+@using HBS.Models
+@using HBS.Services
+@inject IHotelService HotelService
+@inject NavigationManager Navigation
+
+<PageTitle>Search Rooms</PageTitle>
+
+<div class="container mt-4">
+    <h2>Search Available Rooms</h2>
+
+    <div class="card mt-3">
+        <div class="card-body">
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <label class="form-label">Check-in Date</label>
+                    <input type="date" class="form-control" @bind="checkInDate" @bind:event="oninput" />
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Check-out Date</label>
+                    <input type="date" class="form-control" @bind="checkOutDate" @bind:event="oninput" />
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Room Category</label>
+                    <select class="form-select" @bind="selectedCategory">
+                        <option value="">All Categories</option>
+                        @foreach (var cat in Enum.GetValues<RoomCategory>())
+                        {
+                            <option value="@cat">@cat</option>
+                        }
+                    </select>
+                </div>
+            </div>
+            <button class="btn btn-primary mt-3" @onclick="PerformSearch">Search</button>
+            @if (!string.IsNullOrEmpty(errorMessage))
+            {
+                <div class="alert alert-danger mt-3">@errorMessage</div>
+            }
+        </div>
+    </div>
+
+    @if (searchPerformed)
+    {
+        <div class="mt-4">
+            <h4>Available Rooms (@availableRooms.Count)</h4>
+            @if (availableRooms.Any())
+            {
+                <div class="row">
+                    @foreach (var room in availableRooms)
+                    {
+                        <div class="col-md-4 mb-3">
+                            <div class="card">
+                                <div class="card-body">
+                                    <h5 class="card-title">Room @room.RoomNumber</h5>
+                                    <p class="card-text">
+                                        <strong>Category:</strong> @room.Category<br />
+                                        <strong>Capacity:</strong> @room.Capacity guests<br />
+                                        <strong>Price:</strong> $@room.PricePerNight/night<br />
+                                        <strong>Total:</strong> $@(room.PricePerNight * nights) for @nights nights
+                                    </p>
+                                    <button class="btn btn-success" @onclick="() => BookRoom(room.Id)">Book Now</button>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+            else
+            {
+                <div class="alert alert-info">No rooms available for the selected dates and category.</div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private DateTime checkInDate = DateTime.Today.AddDays(1);
+    private DateTime checkOutDate = DateTime.Today.AddDays(2);
+    private string selectedCategory = "";
+    private List<Room> availableRooms = new();
+    private bool searchPerformed = false;
+    private string errorMessage = "";
+    private int nights => (checkOutDate - checkInDate).Days;
+
+    private void PerformSearch()
+    {
+        errorMessage = "";
+        
+        if (checkInDate < DateTime.Today)
+        {
+            errorMessage = "Check-in date cannot be in the past.";
+            return;
+        }
+        
+        if (checkOutDate <= checkInDate)
+        {
+            errorMessage = "Check-out date must be after check-in date.";
+            return;
+        }
+
+        RoomCategory? category = string.IsNullOrEmpty(selectedCategory) ? null : Enum.Parse<RoomCategory>(selectedCategory);
+        availableRooms = HotelService.GetAvailableRooms(checkInDate, checkOutDate, category);
+        searchPerformed = true;
+    }
+
+    private void BookRoom(int roomId)
+    {
+        Navigation.NavigateTo($"/booking/{roomId}?checkIn={checkInDate:yyyy-MM-dd}&checkOut={checkOutDate:yyyy-MM-dd}");
+    }
+}

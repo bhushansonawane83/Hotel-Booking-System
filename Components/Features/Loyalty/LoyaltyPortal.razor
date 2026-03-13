@@ -1,0 +1,176 @@
+@page "/loyalty"
+@rendermode InteractiveServer
+@using HBS.Models
+@using HBS.Services
+@inject IHotelService HotelService
+
+<PageTitle>Loyalty Program</PageTitle>
+
+<div class="container mt-4">
+    <h2>Loyalty Program Portal</h2>
+
+    <div class="card mt-3">
+        <div class="card-body">
+            <h4>Member Login</h4>
+            <div class="mb-3">
+                <label class="form-label">Email</label>
+                <input type="email" class="form-control" @bind="email" style="max-width: 400px" />
+            </div>
+            <button class="btn btn-primary" @onclick="Login">View My Account</button>
+            @if (!string.IsNullOrEmpty(errorMsg))
+            {
+                <div class="alert alert-danger mt-3">@errorMsg</div>
+            }
+        </div>
+    </div>
+
+    @if (customer != null)
+    {
+        <div class="row mt-4">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-body">
+                        <h4>Welcome, @customer.Name!</h4>
+                        <hr />
+                        <div class="mb-3">
+                            <h5>Loyalty Status</h5>
+                            <p>
+                                <strong>Tier:</strong> 
+                                <span class="badge bg-warning text-dark fs-5">@customer.LoyaltyTier</span>
+                            </p>
+                            <p><strong>Points:</strong> @customer.LoyaltyPoints</p>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <h6>Tier Benefits</h6>
+                            <ul>
+                                @foreach (var benefit in GetTierBenefits(customer.LoyaltyTier))
+                                {
+                                    <li>@benefit</li>
+                                }
+                            </ul>
+                        </div>
+
+                        <div class="progress" style="height: 25px;">
+                            <div class="progress-bar" role="progressbar" style="width: @GetProgressToNextTier()%" 
+                                 aria-valuenow="@GetProgressToNextTier()" aria-valuemin="0" aria-valuemax="100">
+                                @GetProgressToNextTier()% to @GetNextTier()
+                            </div>
+                        </div>
+                        <small class="text-muted">@GetPointsToNextTier() points needed for @GetNextTier()</small>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-body">
+                        <h5>Booking History</h5>
+                        <hr />
+                        @if (bookings.Any())
+                        {
+                            <div class="list-group">
+                                @foreach (var booking in bookings)
+                                {
+                                    var room = HotelService.GetRoom(booking.RoomId);
+                                    <div class="list-group-item">
+                                        <div class="d-flex justify-content-between">
+                                            <h6>Booking #@booking.Id</h6>
+                                            <span class="badge bg-info">@booking.Status</span>
+                                        </div>
+                                        <p class="mb-1">
+                                            <strong>Room:</strong> @room?.RoomNumber (@room?.Category)<br />
+                                            <strong>Dates:</strong> @booking.CheckIn.ToShortDateString() - @booking.CheckOut.ToShortDateString()<br />
+                                            <strong>Total:</strong> $@booking.TotalPrice
+                                        </p>
+                                    </div>
+                                }
+                            </div>
+                        }
+                        else
+                        {
+                            <p class="text-muted">No bookings yet. Start earning points by making your first reservation!</p>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private string email = "";
+    private string errorMsg = "";
+    private Customer? customer;
+    private List<Booking> bookings = new();
+
+    private void Login()
+    {
+        errorMsg = "";
+        customer = null;
+
+        if (string.IsNullOrWhiteSpace(email))
+        {
+            errorMsg = "Please enter your email.";
+            return;
+        }
+
+        customer = HotelService.GetCustomerByEmail(email);
+        
+        if (customer == null)
+        {
+            errorMsg = "No account found with this email.";
+            return;
+        }
+
+        bookings = HotelService.GetCustomerBookings(customer.Id);
+    }
+
+    private string GetTierBadge(string tier) => tier switch
+    {
+        "Platinum" => "bg-dark",
+        "Gold" => "bg-warning text-dark",
+        "Silver" => "bg-secondary",
+        _ => "bg-brown"
+    };
+
+    private List<string> GetTierBenefits(string tier) => tier switch
+    {
+        "Platinum" => new() { "20% discount on all bookings", "Free room upgrades", "Priority check-in", "Complimentary breakfast" },
+        "Gold" => new() { "15% discount on all bookings", "Late checkout", "Welcome drink" },
+        "Silver" => new() { "10% discount on all bookings", "Free WiFi upgrade" },
+        _ => new() { "5% discount on all bookings", "Earn points on stays" }
+    };
+
+    private string GetNextTier() => customer?.LoyaltyTier switch
+    {
+        "Bronze" => "Silver",
+        "Silver" => "Gold",
+        "Gold" => "Platinum",
+        _ => "Max Tier"
+    };
+
+    private int GetPointsToNextTier()
+    {
+        if (customer == null) return 0;
+        return customer.LoyaltyTier switch
+        {
+            "Bronze" => 500 - customer.LoyaltyPoints,
+            "Silver" => 1000 - customer.LoyaltyPoints,
+            "Gold" => 2000 - customer.LoyaltyPoints,
+            _ => 0
+        };
+    }
+
+    private int GetProgressToNextTier()
+    {
+        if (customer == null) return 0;
+        return customer.LoyaltyTier switch
+        {
+            "Bronze" => (int)((customer.LoyaltyPoints / 500.0) * 100),
+            "Silver" => (int)(((customer.LoyaltyPoints - 500) / 500.0) * 100),
+            "Gold" => (int)(((customer.LoyaltyPoints - 1000) / 1000.0) * 100),
+            _ => 100
+        };
+    }
+}

@@ -1,0 +1,200 @@
+@page "/booking/{RoomId:int}"
+@rendermode InteractiveServer
+@using HBS.Models
+@using HBS.Services
+@inject IHotelService HotelService
+@inject NavigationManager Navigation
+
+<PageTitle>Complete Booking</PageTitle>
+
+<div class="container mt-4">
+    <h2>Complete Your Booking</h2>
+
+    @if (room != null)
+    {
+        <div class="row mt-4">
+            <div class="col-md-8">
+                <div class="card">
+                    <div class="card-body">
+                        <h4>Guest Information</h4>
+                        <div class="mb-3">
+                            <label class="form-label">Full Name *</label>
+                            <input type="text" class="form-control" @bind="customerName" />
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Email *</label>
+                            <input type="email" class="form-control" @bind="customerEmail" @bind:after="CheckExistingCustomer" />
+                        </div>
+                        @if (existingCustomer != null)
+                        {
+                            <div class="alert alert-info">
+                                Welcome back, @existingCustomer.Name! 
+                                <br/>You have @existingCustomer.LoyaltyPoints points (@existingCustomer.LoyaltyTier tier)
+                            </div>
+                        }
+                        <div class="mb-3">
+                            <label class="form-label">Phone *</label>
+                            <input type="tel" class="form-control" @bind="customerPhone" />
+                        </div>
+                        @if (existingCustomer != null && existingCustomer.LoyaltyPoints >= 100)
+                        {
+                            <div class="mb-3">
+                                <label class="form-label">Redeem Points (100 points = $10 discount)</label>
+                                <input type="number" class="form-control" @bind="pointsToRedeem" @bind:event="oninput" min="0" max="@maxRedeemablePoints" step="100" />
+                                <small class="text-muted">You can redeem up to @maxRedeemablePoints points ($@maxDiscount discount)</small>
+                            </div>
+                        }
+                        <div class="mb-3">
+                            <label class="form-label">Special Requests</label>
+                            <textarea class="form-control" @bind="notes" rows="3"></textarea>
+                        </div>
+
+                        @if (!string.IsNullOrEmpty(errorMessage))
+                        {
+                            <div class="alert alert-danger">@errorMessage</div>
+                        }
+
+                        @if (bookingSuccess)
+                        {
+                            <div class="alert alert-success">
+                                Booking confirmed! Booking ID: #@bookingId
+                                <br />You earned @loyaltyPointsEarned loyalty points!
+                            </div>
+                        }
+
+                        <button class="btn btn-primary" @onclick="ConfirmBooking" disabled="@bookingSuccess">Confirm Booking</button>
+                        <button class="btn btn-secondary ms-2" @onclick="GoBack">Back to Search</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-body">
+                        <h5>Booking Summary</h5>
+                        <hr />
+                        <p><strong>Room:</strong> @room.RoomNumber</p>
+                        <p><strong>Category:</strong> @room.Category</p>
+                        <p><strong>Check-in:</strong> @checkIn.ToShortDateString()</p>
+                        <p><strong>Check-out:</strong> @checkOut.ToShortDateString()</p>
+                        <p><strong>Nights:</strong> @nights</p>
+                        <hr />
+                        <h5>Total: $@totalPrice</h5>
+                        @if (discount > 0)
+                        {
+                            <p class="text-success">Discount: -$@discount</p>
+                            <h5>Final Total: $@finalPrice</h5>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="alert alert-warning">Room not found.</div>
+    }
+</div>
+
+@code {
+    [Parameter] public int RoomId { get; set; }
+    [SupplyParameterFromQuery] public string? CheckIn { get; set; }
+    [SupplyParameterFromQuery] public string? CheckOut { get; set; }
+
+    private Room? room;
+    private DateTime checkIn;
+    private DateTime checkOut;
+    private int nights;
+    private decimal totalPrice;
+
+    private string customerName = "";
+    private string customerEmail = "";
+    private string customerPhone = "";
+    private string notes = "";
+    private string errorMessage = "";
+    private bool bookingSuccess = false;
+    private int bookingId;
+    private int loyaltyPointsEarned;
+    private Customer? existingCustomer;
+    private int pointsToRedeem = 0;
+    private int maxRedeemablePoints => existingCustomer != null ? Math.Min(existingCustomer.LoyaltyPoints, (int)(totalPrice * 10)) : 0;
+    private decimal discount => pointsToRedeem / 10m;
+    private decimal maxDiscount => maxRedeemablePoints / 10m;
+    private decimal finalPrice => totalPrice - discount;
+
+    protected override void OnInitialized()
+    {
+        room = HotelService.GetRoom(RoomId);
+        
+        if (room != null && DateTime.TryParse(CheckIn, out var cin) && DateTime.TryParse(CheckOut, out var cout))
+        {
+            checkIn = cin;
+            checkOut = cout;
+            nights = (checkOut - checkIn).Days;
+            totalPrice = room.PricePerNight * nights;
+        }
+    }
+
+    private void CheckExistingCustomer()
+    {
+        if (!string.IsNullOrWhiteSpace(customerEmail) && customerEmail.Contains("@"))
+        {
+            existingCustomer = HotelService.GetCustomerByEmail(customerEmail);
+            if (existingCustomer != null)
+            {
+                customerName = existingCustomer.Name;
+                customerPhone = existingCustomer.Phone;
+            }
+        }
+    }
+
+    private void ConfirmBooking()
+    {
+        errorMessage = "";
+
+        if (string.IsNullOrWhiteSpace(customerName))
+        {
+            errorMessage = "Please enter your name.";
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(customerEmail) || !customerEmail.Contains("@"))
+        {
+            errorMessage = "Please enter a valid email address.";
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(customerPhone))
+        {
+            errorMessage = "Please enter your phone number.";
+            return;
+        }
+
+        try
+        {
+            int customerId;
+            if (existingCustomer != null)
+            {
+                customerId = existingCustomer.Id;
+            }
+            else
+            {
+                customerId = HotelService.CreateCustomer(customerName, customerEmail, customerPhone);
+            }
+            
+            var booking = HotelService.CreateBooking(RoomId, customerId, checkIn, checkOut, pointsToRedeem);
+            bookingId = booking.Id;
+            
+            var customer = HotelService.GetCustomerByEmail(customerEmail);
+            loyaltyPointsEarned = customer?.LoyaltyPoints ?? 0;
+            
+            bookingSuccess = true;
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Booking failed: {ex.Message}";
+        }
+    }
+
+    private void GoBack() => Navigation.NavigateTo("/search");
+}

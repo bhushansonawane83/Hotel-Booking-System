@@ -1,0 +1,29 @@
+@using HBS.Models
+
+<div class="card h-100">
+    <div class="card-body">
+        <h5 class="card-title">Room @Room.RoomNumber</h5>
+        <p class="card-text">
+            <strong>Category:</strong> @Room.Category<br />
+            <strong>Capacity:</strong> @Room.Capacity guests<br />
+            <strong>Price:</strong> $@Room.PricePerNight/night<br />
+            @if (Nights > 0)
+            {
+                <text><strong>Total:</strong> $@totalPrice for @Nights nights</text>
+            }
+        </p>
+        @if (ShowBookButton)
+        {
+            <button class="btn btn-success" @onclick="OnBook">Book Now</button>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter] public Room Room { get; set; } = null!;
+    [Parameter] public int Nights { get; set; }
+    [Parameter] public bool ShowBookButton { get; set; } = true;
+    [Parameter] public EventCallback OnBook { get; set; }
+
+    private decimal totalPrice => Room.PricePerNight * Nights;
+}
